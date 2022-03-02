@@ -29,6 +29,20 @@ def main():
     get_borrowable_data(lending_pool, account)
 
 
+def repay_all(amount, lending_pool, account):
+    approve_erc20(Web3.toWei(amount, 'ether'), lending_pool,
+                  config['networks'][network.show_active()]['dai_token'])
+
+    repay_tx = lending_pool.repay(
+        config["networks"][network.show_active()]['dai_token'],
+        amount,
+        1,
+        account.address,
+        {'from': account}
+    )
+    repay_tx.wait(1)
+    print('Repayed!')
+
 def get_asset_price(price_feed_address):
     dai_eth_price_feed = interface.AggregatorV3Interface(price_feed_address)
     latest_price = dai_eth_price_feed.latestRoundData()[1]
