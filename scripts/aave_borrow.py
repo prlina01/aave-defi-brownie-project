@@ -13,6 +13,29 @@ def main():
         get_weth()
     lending_pool = get_lending_pool()
     approve_erc20(amount, lending_pool.address, erc20_address, account)
+    tx = lending_pool.deposit(erc20_address, amount, account.address, 0, {'from': account})
+    tx.wait(1)
+
+    borrowable_eth, total_debt =get_borrowable_data(lending_pool, account)
+    dai_eth_price = get_asset_price(
+        config['networks'][network.show_active()]['dai_eth_price_feed']
+    )
+    #borrowable_eth -> borrowable_dai * 95%
+    amount_dai_to_borrow = (1 / dai_eth_price) * (borrowable_eth * 0.95)
+    dai_address = config['networks'][network.show_active()]['dai_token']
+    borrow_tx = lending_pool.borrow(dai_address, Web3.toWei(amount_dai_to_borrow, 'ether'),
+                                    1, 0, account.address, {'from': account})
+
+    get_borrowable_data(lending_pool, account)
+
+
+def get_asset_price(price_feed_address):
+    dai_eth_price_feed = interface.AggregatorV3Interface(price_feed_address)
+    latest_price = dai_eth_price_feed.latestRoundData()[1]
+    converted_latest_price = Web3.fromWei(latest_price, 'ether')
+    print(f"DAI/ETH price =", {converted_latest_price})
+    return converted_latest_price
+
 
 def get_lending_pool():
     lending_pool_addresses_provider = interface.ILendingPoolAddressesProvider(
@@ -23,8 +46,26 @@ def get_lending_pool():
     lending_pool = interface.IlendingPool(lending_pool_address)
     return lending_pool
 
+
 def approve_erc20(amount, spender, erc20_address, account):
     erc20 = interface.IERC20(erc20_address)
     tx = erc20.approve(spender, amount, {"from": account})
     tx.wait(1)
     return tx
+
+def get_borrowable_data(lending_pool, account):
+    total_colalteral_eth, \
+    total_debt_eth,\
+    available_borrow_eth,\
+    current_liquidation_threshold,\
+    ltv,\
+    health_factor =\
+        lending_pool.getUserAccountData(account.address)
+
+    available_borrow_eth = Web3.fromWei(available_borrow_eth, 'ether')
+    total_colalteral_eth = Web3.fromWei(total_colalteral_eth, 'ether')
+    total_debt_eth = Web3.fromWei(total_debt_eth, 'ether')
+    print(f"You have {total_colalteral_eth} ETH deposited.")
+    print(f"You have {total_debt_eth} ETH deposited")
+    print(f"You can borrow {available_borrow_eth} ETH")
+    return (float(available_borrow_eth), float(total_debt_eth))
